@@ -1,0 +1,72 @@
+﻿References:
+
+
+1) https://www.linux.org.ru/forum/general/10574293?cid=11356142
+
+=== [ Content-1 ] ====================================================================================
+
+Универсальный и более правильный способ управления батарейкой
+
+Нужно использовать метод ACPI \_SB.PCI0.LPCB.EC0.VPC0.SBMC. Он принимает один параметр от 0 до 6. Пока что протестировать можно, используя модуль ядра acpi_call. Думаю, это должно работать на всех поддерживаемых леново.
+
+Например, так я включаю режим зарядки до 50%:
+
+echo '\_SB.PCI0.LPCB.EC0.VPC0.SBMC 4' > /proc/acpi/call
+cat /proc/acpi/call | hexdump -C
+
+А так я выключаю его:
+
+echo '\_SB.PCI0.LPCB.EC0.VPC0.SBMC 5' > /proc/acpi/call
+cat /proc/acpi/call | hexdump -C
+
+PoMbl4, нужна помощь в тестировании. Я вижу в твоём DSDT, что каждое значение параметра от 0 до 6 что-то делает. На моём же ноуте имеют смысл только значения 0, 1, 4, 5. Значения 2, 3, 6 у меня ничего не делают. Попробуй повызывать по очереди метод SBMC с параметрами от 0 до 6 и посмотреть, что при этом происходит. Будет полезно знать всё, на что способен этот метод, я планирую эту функциональность попытаться добавить в драйвер ideapad-laptop.
+------------------------------------------------------------------------------------------------------
+
+2) https://askubuntu.com/questions/102299/how-do-i-use-acpi-call
+
+3) https://github.com/dominiksalvet/asus-fan-control/issues/42
+File /proc/acpi/call not found, solved with reinstalling "acpi-call-dkms" pack:
+
+1. sudo apt purge acpi-call-dkms
+2. reboot laptop
+3. sudo apt install acpi-call-dkms
+4. reboot laptop
+5. sudo modprobe acpi_call 
+
+for send ACPI-cmds need for load "acpi-call" first:
+> sudo modprobe acpi_call
+
+
+4) https://github.com/Lenovsky/ipman
+5) dsdt.dsl from acpidump at Lenovo IdeaPad Z570:
+
+Method (SBMC, 1, NotSerialized)
+{
+    If ((Arg0 == Zero))
+    {
+        RSBM = Zero
+    }
+
+    If ((Arg0 == One))
+    {
+        RSBM = One
+    }
+
+    If ((Arg0 == 0x02)){}
+    If ((Arg0 == 0x03)){}
+    If ((Arg0 == 0x04))
+    {
+        SMBM = One
+    }
+
+    If ((Arg0 == 0x05))
+    {
+        SMBM = Zero
+        RSBM = Zero
+    }
+
+    If ((Arg0 == 0x06)){}
+}
+		
+So, for values 2, 3, 6 - no any action
+Some actions with values: 0, 1, 4, 5
