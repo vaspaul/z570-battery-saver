@@ -1,0 +1,147 @@
+#!/bin/bash
+
+# z570-battery-saver - Lenovo Ideapad Z570 battery saver for Linux
+#
+# The script allows managing Lenovo Ideapad Z570 firmware on the battery
+# and shifts between the usual charging thresholds from 100% to 50%.
+# In some cases, not charging the battery to 100% constantly may improve
+# the overall lifespan of the battery.
+# This setting is suggested for a system that is always plugged into
+# the AC adapter.
+#
+# Author:     vaspaul
+# Source:     https://github.com/vaspaul/z570-battery-saver
+# Version:    1.0.0
+
+readonly VERSION=1.0.0
+
+
+readonly BATTERY_SAVE=4
+readonly BATTERY_FULL_CHARGE=5
+readonly BATTERY_CALIBRATION_START=1
+readonly BATTERY_CALIBRATION_STOP=0
+
+
+display_help() {
+    # Prints general usage of the script.
+
+    cat <<EOF
+usage: ${0##*/} [operation]
+operations:
+  -h, --help        Show this message.
+  -v, --version     Show script version.
+  -s, --status      Show battery protection status.
+  -e, --enable      Enable battery protection (charge level 50%).
+  -d, --disable     Disable battery protection (charge level 100%).
+  --clbr_start      Start battery calibration.
+  --clbr_stop       Stop battery calibration.
+EOF
+}
+
+die() {
+    # Raises an error message and exits.
+    # param: $1: $error_message: error message
+
+    local readonly exit_code=1
+    local error_message="$1"
+
+    echo "${0##*/}: ${error_message}" 1>&2
+
+    exit "${exit_code}"
+}
+
+root_check() {
+    # Checks if the script is called as root,
+    # if not raises an error message and dies.
+
+    [[ "$EUID" -ne 0 ]] &&
+        die 'You cannot perform this operation unless you are root.'
+}
+
+battery_protection_status_show() {
+    # Shows battery protection status based on $BATTERY_PROTECTION_STATUS value.
+    #   * 1 -> enabled
+    #	* 0 -> disabled
+    local readonly BATTERY_PROTECTION_STATUS='/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/conservation_mode'
+    local readonly BATTERY_PROTECTION_ENABLED=1
+    local readonly BATTERY_PROTECTION_DISABLED=0
+
+    local status="$(cat "${BATTERY_PROTECTION_STATUS}")"
+
+    if [[ "${status}" -eq "${BATTERY_PROTECTION_ENABLED}" ]]; then
+        echo "Battery protection: ENABLED (charge level 50%)"
+    elif [[ "${status}" -eq "${BATTERY_PROTECTION_DISABLED}" ]]; then
+        echo "Battery protection: DISABLED (charge level 100%)"
+    else
+        echo "Battery protection: UNKNOWN"
+    fi
+}
+
+set_battery_mode() {
+    local readonly ACPI_RECEIVER='/proc/acpi/call'
+    local readonly ACPI_BATTERY_METHOD='\_SB.PCI0.LPCB.EC0.VPC0.SBMC'
+    
+    # Set battery charging way with ACPI method
+    # param: $1: $store: values for $BATTERY_PROTECTION, where:
+	#   * 1 -> start battery calibration
+	#   * 0 -> stop battery calibration
+    #   * 4 -> enable battery save (charge level 50%)
+    #   * 5 -> disable battery save (charge level 100%)
+
+    local new_value="$1"
+    local acpi_invoke_with_param="$ACPI_BATTERY_METHOD $new_value"
+	bash -c 'modprobe acpi_call'
+	
+    if [[ "${new_value}" -eq "${BATTERY_SAVE}" ]]; then
+        echo "${acpi_invoke_with_param}" >"${ACPI_RECEIVER}"
+		echo 'Battery protection enabled (charge level 50%)'
+    elif [[ "${new_value}" -eq "${BATTERY_FULL_CHARGE}" ]]; then
+        echo "${acpi_invoke_with_param}" >"${ACPI_RECEIVER}"
+		echo 'Battery protection disabled (charge level 100%)'
+    else
+        die "Invalid value encountered in 'set_battery_protection()'"
+    fi
+}
+
+main() {
+    # Parses command-line arguments in order to perform the stuff.
+    # param: $1: $key: key to the stuff
+
+    local key="$1"
+
+    case "${key}" in
+    -h | --help)
+        display_help
+        ;;
+    -v | --version)
+        echo "${0##*/} v${VERSION}"
+        ;;
+    -s | --status)
+        battery_protection_status_show
+        ;;
+    -e | --enable)
+        root_check
+        set_battery_mode "${BATTERY_SAVE}"
+        ;;
+    -d | --disable)
+        root_check
+        set_battery_mode "${BATTERY_FULL_CHARGE}"
+        ;;
+    --clbr_start)
+        root_check
+        set_battery_mode "${BATTERY_CALIBRATION_START}"
+        ;;
+	--clbr_stop)
+        root_check
+        set_battery_mode "${BATTERY_CALIBRATION_STOP}"
+        ;;
+    "")
+        die "No operation specified. See '${0##*/} --help'."
+        ;;
+    *)
+        die "Invaild operation '${key}'. See '${0##*/} --help'."
+        ;;
+    esac
+}
+
+main "$@"
