@@ -9,7 +9,7 @@ the overall lifespan of the battery. This setting is suggested for a system
 that is always plugged into the AC adapter.
 
 
-## Instalation
+## Installation
 
 The standard `make install` routine is used.
 
@@ -17,6 +17,14 @@ The following additional variables are supported:
 - `DESTDIR` -- determines environment for staged installs,
 - `PREFIX`  -- determines where the script will be installed (default: `/usr/local`).
 
+### Installation script:
+
+```shell
+wget https://github.com/vaspaul/z570-battery-saver/releases/download/v1.0/z570-battery-saver-v1_0.zip
+unzip z570-battery-saver-v1_0.zip
+cd z570-battery-saver-main
+sudo make install
+```
 
 ## Requirements
 
